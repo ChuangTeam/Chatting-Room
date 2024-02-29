@@ -317,6 +317,8 @@ class ChatRoom:
         # 运行主循环
         self.root.mainloop()
 
+class test():
+    def __init__(self):
 
 if __name__ == '__main__':
     root = ChatRoom()

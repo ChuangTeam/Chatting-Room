@@ -1,10 +1,10 @@
 from Web.server import ChatServerProcess, MusicServerProcess
 from threading import Thread
-
+from socket import gethostbyname, gethostname
 
 if __name__ == '__main__':
-    host = '127.0.0.1'
-    # host = gethostbyname(gethostname())
+    # host = '127.0.0.1'
+    host = gethostbyname(gethostname())
 
     chat_server = ChatServerProcess(host, 7711, 10)
     voice_stream_server = MusicServerProcess(host, 7712, 10)

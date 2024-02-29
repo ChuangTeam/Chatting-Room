@@ -7,9 +7,23 @@ import os
 import pyaudio
 import threading
 from Web.client import Client
+import configparser
+
 
 class ChatRoom:
     def __init__(self):
+        # 创建管理对象
+        self.config = configparser.ConfigParser()  # 实例化一个对象
+        # 读ini文件
+        self.config.read('./config.ini', encoding="utf-8")  # python3
+        items = self.config.items('login')
+
+        self.init_user_name = items[0][1]
+        self.init_ip = items[1][1]
+        self.init_text_port = items[2][1]
+        self.init_voice_port = items[3][1]
+        self.init_track = items[4][1]
+
         self.chat_client = Client()
         self.voice_client = Client()
 
@@ -18,7 +32,6 @@ class ChatRoom:
         # 创建主窗口
         self.root = tk.Tk()
         self.root.title("Chatting Room")
-
         self.root.protocol("WM_DELETE_WINDOW", self.delete_window)
 
         width = 600
@@ -30,13 +43,22 @@ class ChatRoom:
         self.root.geometry(geometry)
 
         self.root.resizable(width=False, height=False)
-        # self.root.iconphoto(True, tk.PhotoImage(file='ico.png'))
 
         with open('tmp.ico', 'wb') as tmp:
             tmp.write(base64.b64decode(Icon().img))
         self.root.iconbitmap('tmp.ico')
         os.remove('tmp.ico')
 
+        # 顶部菜单栏
+        self.menu = tk.Menu(self.root)
+
+        self.menu_file = tk.Menu(self.menu, tearoff=0)
+        self.menu_file.add_command(label='保存配置', command=self.save_config)
+        self.menu_file.add_command(label='读取配置', command=self.import_config)
+
+        # 设置菜单栏
+        self.menu.add_cascade(label='文件', menu=self.menu_file)
+        self.root.config(menu=self.menu)
 
         # 创建聊天记录框
         self.chat_log = tk.Text(self.root, bd=1, height=20, width=50)
@@ -81,9 +103,34 @@ class ChatRoom:
         self.open_voice_channel_button.place(x=51, y=353)
 
         # 设置初始值
-        self.client_field.insert(0, '118.178.134.221')
-        # self.client_field.insert(0, '127.0.0.1')
-        self.client_port_field.insert(0, '7711')
+        self.user_name_field.insert(0, self.init_user_name)
+        self.client_field.insert(0, self.init_ip)
+        self.client_port_field.insert(0, self.init_text_port)
+
+    def save_config(self):
+        config = configparser.ConfigParser()
+        config['login'] = {
+            'user': self.user_name_field.get(),
+            'ip': self.client_field.get(),
+            'text_port': self.client_port_field.get(),
+            'voice_port': self.server_port_entry.get(),
+            'track': self.device_idx_entry.get()
+            }
+        with open('config.ini', 'w') as configfile:
+            config.write(configfile)
+
+    def import_config(self):
+
+
+        # 读ini文件
+        self.config.read('./config.ini', encoding="utf-8")  # python3
+        items = self.config.items('login')
+
+        self.init_user_name = items[0][1]
+        self.init_ip = items[1][1]
+        self.init_text_port = items[2][1]
+        self.init_voice_port = items[3][1]
+        self.init_track = items[4][1]
 
     def open_voice_channel_window(self):
         self.voice_window = tk.Toplevel(self.root)
@@ -131,10 +178,9 @@ class ChatRoom:
         self.device_idx_entry.place(x=36, y=150, width=150, height=30)
 
         # 设置初始值
-        self.server_ip_entry.insert(0, '118.178.134.221')
-        # self.server_ip_entry.insert(0, '127.0.0.1')
-        self.server_port_entry.insert(0, '7712')
-        self.device_idx_entry.insert(0, '3')
+        self.server_ip_entry.insert(0, self.init_ip)
+        self.server_port_entry.insert(0, self.init_voice_port)
+        self.device_idx_entry.insert(0, self.init_track)
 
     def voice_channel_delete_window(self):
         try:
@@ -225,7 +271,6 @@ class ChatRoom:
             sys.exit(0)
 
 
-
     def connect_server(self):
         if self.user_name_field.get() != '':
             self.client_field.config(state='readonly')
@@ -276,3 +321,5 @@ class ChatRoom:
 if __name__ == '__main__':
     root = ChatRoom()
     root.mainloop()
+
+

@@ -1,6 +1,6 @@
 from Web.server import ChatServerProcess, MusicServerProcess
 from threading import Thread
-from socket import gethostbyname, gethostname
+
 
 if __name__ == '__main__':
     host = '127.0.0.1'

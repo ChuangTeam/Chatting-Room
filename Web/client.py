@@ -7,6 +7,7 @@ class Client:
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     def connect(self, ip='127.0.0.1', port=7788):
         # 2. 链接服务器
+        self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_addr = (ip, port)
         self.tcp_socket.connect(self.server_addr)
         self.tcp_socket.setblocking(False)
@@ -18,6 +19,7 @@ class Client:
 
     def close(self):
         # 4. 关闭套接字
+        self.tcp_socket.shutdown(socket.SHUT_RDWR)
         self.tcp_socket.close()
     def listener(self):
         # 接收对方发送过来的数据

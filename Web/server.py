@@ -2,6 +2,7 @@ import socket
 import time
 from threading import Thread
 
+
 class MusicServerProcess:
     def __init__(self, ipaddr, port, num):
         self.ipaddr = ipaddr
@@ -9,22 +10,26 @@ class MusicServerProcess:
         self.num = num
         self.conn_list = []
         self.addr_list = []
+        self.name_dict = {}
 
     # 服务端的数据接收，在调用时使用多进程
     def server_link(self, conn, addr):
         while True:
-            message = conn.recv(1024)
             try:
-                m = message.decode("gb18030")
-                if m == 'quit':
-                    break
-            except:
+                message = conn.recv(1024)
                 try:
-                    self.forward_message(conn, addr, message)
+                    m = message.decode("gb18030")
+                    if m == 'quit':
+                        break
                 except:
-                    pass
+                    try:
+                        self.forward_message(conn, addr, message)
+                    except:
+                        pass
+            except:
+                break
         print(addr, '离开了语音频道')
-
+        self.forward_message(conn, addr, f'{addr}离开了语音频道\n')
         self.addr_list.remove(addr)
         self.conn_list.remove(conn)
 
@@ -32,6 +37,7 @@ class MusicServerProcess:
 
     def forward_message(self, sender, addr, message):
         addr_index = -1
+
         for i, v in enumerate(self.addr_list):
             if v == addr:
                 addr_index = i
@@ -41,7 +47,6 @@ class MusicServerProcess:
                 conn.send(message)
                 # print('from', self.addr_list[addr_index], 'to', self.addr_list[i])
 
-
     # 服务端的启动程序
     def server_start(self):
         s_pro = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -49,14 +54,14 @@ class MusicServerProcess:
         s_pro.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s_pro.bind((self.ipaddr, self.port))
         s_pro.listen(self.num)
-        print('音乐频道等待连接...')
+        print('语音频道等待连接...')
         while True:
             conn, addr = s_pro.accept()
 
             self.addr_list.append(addr)
             self.conn_list.append(conn)
 
-            print("音乐频道连接到", addr)
+            print("语音频道连接到", addr)
             # 启动多进程实现多连接
             p = Thread(target=self.server_link, args=(conn, addr))
             p.start()
@@ -100,6 +105,7 @@ class ChatServerProcess:
             except Exception:
                 pass
         print(addr, '断开了连接')
+        self.forward_message(conn, addr, f'{self.name_dict[addr]}断开了连接\n')
         self.conn_list.remove(conn)
         self.addr_list.remove(addr)
         conn.close()
@@ -129,7 +135,7 @@ class ChatServerProcess:
             self.addr_list.append(addr)
             print(f'{user_name}进入频道了\n')
             self.forward_message(conn, addr, f'{user_name}进入频道了\n')
+            self.name_dict[addr] = user_name
             # print(self.addr_list)
             p = Thread(target=self.server_link, args=(conn, addr))
             p.start()
-

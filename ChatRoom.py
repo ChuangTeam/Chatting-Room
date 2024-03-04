@@ -8,6 +8,7 @@ import pyaudio
 import threading
 from Web.client import Client
 import configparser
+from Web.audioTool import amplify_audio, create_head
 
 
 class ChatRoom:
@@ -20,8 +21,8 @@ class ChatRoom:
 
         self.init_user_name = items[0][1]
         self.init_ip = items[1][1]
-        self.init_text_port = items[2][1]
-        self.init_voice_port = items[3][1]
+        self.init_text_port = int(items[2][1])
+        self.init_voice_port = int(items[3][1])
         self.init_track = items[4][1]
 
         self.chat_client = Client()
@@ -49,6 +50,8 @@ class ChatRoom:
         self.root.iconbitmap('tmp.ico')
         os.remove('tmp.ico')
 
+        self.event = threading.Event()
+
         # 顶部菜单栏
         self.menu = tk.Menu(self.root)
 
@@ -75,11 +78,7 @@ class ChatRoom:
         self.connect_button = tk.Button(self.root, text="Connect", command=self.connect_server)
 
         # 创建关闭连接按钮
-        self.close_client_button = tk.Button(self.root, text="Close", command=self.close_connect)
-
-        # 创建语音连接频道
-        self.open_voice_channel_button = tk.Button(self.root, text='Voice\nChannel',
-                                                   command=self.open_voice_channel_window)
+        self.close_client_button = tk.Button(self.root, text="Close", command=self.close_button)
 
         # 创建用户名输入框
         self.user_name_field = tk.Entry(self.root, bd=1)
@@ -96,32 +95,64 @@ class ChatRoom:
         self.user_name_field.place(x=19, y=83, width=130, height=30)
         tk.Label(self.root, text='服务器IP：', anchor="w").place(x=20, y=127, width=66, height=30)
         self.client_field.place(x=19, y=160, width=130, height=30)
-        tk.Label(self.root, text='端口号：', anchor="w").place(x=20, y=204, width=75, height=30)
-        self.client_port_field.place(x=20, y=234, width=130, height=30)
+        # tk.Label(self.root, text='端口号：', anchor="w").place(x=20, y=204, width=75, height=30)
+        # self.client_port_field.place(x=20, y=234, width=130, height=30)
         self.connect_button.place(x=20, y=283, width=66, height=30)
         self.close_client_button.place(x=98, y=283, width=50, height=30)
-        self.open_voice_channel_button.place(x=51, y=353)
+        # self.open_voice_channel_button.place(x=51, y=353)
 
         # 设置初始值
         self.user_name_field.insert(0, self.init_user_name)
         self.client_field.insert(0, self.init_ip)
         self.client_port_field.insert(0, self.init_text_port)
 
+        # 音量变量
+        self.volumeVar = tk.StringVar()
+
+        # 创建连接按钮
+        self.micro_state = tk.BooleanVar()
+        self.micro_button = tk.Checkbutton(self.root, text="语音",
+                                           variable=self.micro_state,
+                                           command=self.micro_button_func)
+
+
+        # 创建音轨输入框
+        self.device_idx_entry = tk.Entry(self.root, bd=1)
+
+        self.state = tk.StringVar()
+        self.state.set("语音未连接")
+        state_label = tk.Label(self.root, textvariable=self.state, anchor="center")
+        state_label.place(x=5, y=17, width=150, height=30)
+
+        self.micro_button.place(x=90, y=340, width=60, height=60)
+
+        tk.Label(self.root, text='音轨编号', anchor="w").place(x=20, y=204, width=75, height=30)
+        self.device_idx_entry.place(x=20, y=234, width=130, height=30)
+
+        tk.Scale(self.root, label='音量',
+                 from_=20, to=-20,
+                 resolution=0.5, show=0,
+                 variable=self.volumeVar
+                 ).place(x=29, y=350)
+
+        # 设置初始值
+        # self.server_ip_entry.insert(0, self.init_ip)
+
+        self.device_idx_entry.insert(0, self.init_track)
+
     def save_config(self):
         config = configparser.ConfigParser()
         config['login'] = {
             'user': self.user_name_field.get(),
             'ip': self.client_field.get(),
-            'text_port': self.client_port_field.get(),
-            'voice_port': self.server_port_entry.get(),
+            'text_port': '7711',
+            'voice_port': '7712',
             'track': self.device_idx_entry.get()
-            }
+        }
         with open('config.ini', 'w') as configfile:
             config.write(configfile)
 
     def import_config(self):
-
-
         # 读ini文件
         self.config.read('./config.ini', encoding="utf-8")  # python3
         items = self.config.items('login')
@@ -132,71 +163,8 @@ class ChatRoom:
         self.init_voice_port = items[3][1]
         self.init_track = items[4][1]
 
-    def open_voice_channel_window(self):
-        self.voice_window = tk.Toplevel(self.root)
-        self.voice_window.title("MusicStreaming")
-
-        self.voice_window.protocol("WM_DELETE_WINDOW", self.voice_channel_delete_window)
-
-        width = 367
-        height = 222
-        screenwidth = self.voice_window.winfo_screenwidth()
-        screenheight = self.voice_window.winfo_screenheight()
-        geometry = '%dx%d+%d+%d' % (width, height, (screenwidth - width) / 2, (screenheight - height) / 2)
-        self.voice_window.geometry(geometry)
-
-        self.voice_window.resizable(width=False, height=False)
-
-        # 创建连接按钮
-        self.connect_button = tk.Button(self.voice_window, text="Connect",
-                                        command=self.voice_channel_connect)
-
-        # 创建断开连接按钮
-        self.close_button = tk.Button(self.voice_window, text="Close",
-                                      command=self.voice_channel_close)
-
-        # 创建服务器ip输入框
-        self.server_ip_entry = tk.Entry(self.voice_window, bd=1)
-        # 创建服务器端口输入框
-        self.server_port_entry = tk.Entry(self.voice_window, bd=1)
-        # 创建音轨输入框
-        self.device_idx_entry = tk.Entry(self.voice_window, bd=1)
-
-        self.state = tk.StringVar()
-        self.state.set("未连接")
-        state_label = tk.Label(self.voice_window, textvariable=self.state, anchor="center")
-        state_label.place(x=183, y=17, width=200, height=30)
-
-        self.connect_button.place(x=220, y=61, width=60, height=39)
-        self.close_button.place(x=290, y=61, width=60, height=39)
-
-        tk.Label(self.voice_window, text='服务器IP', anchor="w").place(x=36, y=0, width=50, height=30)
-        self.server_ip_entry.place(x=36, y=30, width=150, height=30)
-        tk.Label(self.voice_window, text='服务器端口', anchor="w").place(x=36, y=60, width=100, height=30)
-        self.server_port_entry.place(x=36, y=90, width=150, height=30)
-        tk.Label(self.voice_window, text='音轨编号', anchor="w").place(x=36, y=120, width=50, height=30)
-        self.device_idx_entry.place(x=36, y=150, width=150, height=30)
-
-        # 设置初始值
-        self.server_ip_entry.insert(0, self.init_ip)
-        self.server_port_entry.insert(0, self.init_voice_port)
-        self.device_idx_entry.insert(0, self.init_track)
-
-    def voice_channel_delete_window(self):
-        try:
-            self.voice_client.close()
-            self.input_stream.stop_stream()
-            self.input_stream.close()
-            self.output_stream.stop_stream()
-            self.output_stream.close()
-        except:
-            pass
-        self.is_voice_open = False
-
-        self.voice_window.destroy()
-
     def voice_channel_connect(self):
-        self.state.set('正在尝试连接到音乐频道')
+        self.state.set('正在尝试连接到语音频道')
         self.p = pyaudio.PyAudio()
         self.input_stream = self.p.open(format=pyaudio.paInt16,
                                         input_device_index=int(self.device_idx_entry.get()),
@@ -210,42 +178,51 @@ class ChatRoom:
                                          output=True,
                                          frames_per_buffer=1024)
 
-        self.voice_client.connect(self.server_ip_entry.get(), int(self.server_port_entry.get()))
-        self.state.set('音乐频道已连接')
+        self.voice_client.connect(self.client_field.get(), self.init_voice_port)
+        self.state.set('语音频道已连接')
         self.is_voice_open = True
-        self.server_ip_entry.config(state='readonly')
-        self.server_port_entry.config(state='readonly')
-
-        input_t = threading.Thread(target=self.recv_stream)
-        input_t.daemon = True  # 守护线程
-        output_t = threading.Thread(target=self.send_stream)
-        output_t.daemon = True  # 守护线程
-
-        input_t.start()
-        output_t.start()
+        self.client_field.config(state='readonly')
+        self.device_idx_entry.config(state='readonly')
+        self.input_t = threading.Thread(target=self.recv_stream, args=(self.event,))
+        self.input_t.daemon = True  # 守护线程
+        self.output_t = threading.Thread(target=self.send_stream, args=(self.event,))
+        self.output_t.daemon = True  # 守护线程
+        self.input_t.start()
+        self.output_t.start()
 
     def voice_channel_close(self):
+        self.client_field.config(state='normal')
+        self.device_idx_entry.config(state='normal')
         try:
             self.voice_client.send_data('quit'.encode("gb18030"))
         except:
             pass
-        self.connect_button.config(state='normal')
+        self.voice_client.close()
         self.input_stream.stop_stream()
         self.input_stream.close()
         self.output_stream.stop_stream()
         self.output_stream.close()
+        self.state.set('语音未连接')
 
-    def recv_stream(self):
+    def recv_stream(self, event):
         while self.is_voice_open:
+            if event.is_set():
+                break
             data = self.voice_client.listener()
             if data:
+                wmv_data = create_head(data)
+                wmv_data = amplify_audio(wmv_data, self.volumeVar.get())
+                data = wmv_data[44:]
                 self.output_stream.write(data)
 
-    def send_stream(self):
+    def send_stream(self, event):
         while self.is_voice_open:
-            data = self.input_stream.read(1024)
-            self.voice_client.send_data(data)
-
+            try:
+                data = self.input_stream.read(1024)
+                self.voice_client.send_data(data)
+            except:
+                if event.is_set():
+                    break
 
     def delete_window(self):
         try:
@@ -270,7 +247,26 @@ class ChatRoom:
         except:
             sys.exit(0)
 
-
+    def close_button(self):
+        try:
+            try:
+                try:
+                    self.voice_client.send_data('quit'.encode("gb18030"))
+                    self.voice_client.close()
+                except:
+                    pass
+                self.is_voice_open = False
+                self.input_stream.stop_stream()
+                self.input_stream.close()
+                self.output_stream.stop_stream()
+                self.output_stream.close()
+                self.voice_window.destroy()
+            except:
+                pass
+            self.chat_client.send_data(''.encode("gb18030"))
+            self.chat_client.close()
+        except:
+            pass
     def connect_server(self):
         if self.user_name_field.get() != '':
             self.client_field.config(state='readonly')
@@ -279,9 +275,6 @@ class ChatRoom:
             self.root.after(3000, self.receive_message)
             self.chat_client.connect(ip=self.client_field.get(), port=int(self.client_port_field.get()))
             self.chat_client.send_data(str(self.user_name_field.get()).encode("gb18030"))
-
-    def close_connect(self):
-        self.chat_client.send_data(''.encode("gb18030"))
 
     def send_message(self):
         msg = self.entry_field.get('0.0', 'end')
@@ -296,13 +289,22 @@ class ChatRoom:
         received_msg = self.chat_client.listener()
         if received_msg:
             received_msg = received_msg.decode('gb18030')
-            # print(self.root.state())
             if ':' in received_msg and self.root.state() == 'iconic':
                 sender = received_msg[:received_msg.find(': ')]
-                message = received_msg[received_msg.find(': ')+1:]
+                message = received_msg[received_msg.find(': ') + 1:]
                 self.send_notice(sender, message)
             self._add_message(received_msg)
         self.root.after(200, self.receive_message)
+
+
+
+    def micro_button_func(self):
+        if self.micro_state.get():
+            self.event.clear()
+            self.voice_channel_connect()
+        else:
+            self.event.set()
+            self.voice_channel_close()
 
     def _add_message(self, message):
         self.chat_log.config(state=tk.NORMAL)
@@ -321,5 +323,3 @@ class ChatRoom:
 if __name__ == '__main__':
     root = ChatRoom()
     root.mainloop()
-
-
